@@ -1,0 +1,2 @@
+twscrape>=0.12
+httpx>=0.25
