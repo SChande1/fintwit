@@ -1,28 +1,23 @@
 import os
-import twscrape
+from twikit import Client
 
 
 class TweetScraper:
-    def __init__(self, db_path="twscrape.db"):
-        self.api = twscrape.API(db_path)
+    def __init__(self):
+        self.client = Client("en-US")
         self._setup_done = False
 
     async def ensure_setup(self):
-        """Add account to pool and login if not already done."""
+        """Load browser cookies to authenticate without login."""
         if self._setup_done:
             return
 
-        accounts = await self.api.pool.accounts_info()
-        if len(accounts) == 0:
-            username = os.environ["TWITTER_USERNAME"]
-            password = os.environ["TWITTER_PASSWORD"]
-            email = os.environ.get("TWITTER_EMAIL", "")
-            email_password = os.environ.get("TWITTER_EMAIL_PASSWORD", password)
-            await self.api.pool.add_account(
-                username, password, email, email_password
-            )
-            await self.api.pool.login_all()
+        auth_token = os.environ["TWITTER_AUTH_TOKEN"]
+        ct0 = os.environ["TWITTER_CT0"]
 
+        self.client.set_cookies(
+            {"auth_token": auth_token, "ct0": ct0}
+        )
         self._setup_done = True
 
     async def get_user_tweets(self, screen_name, limit=20):
@@ -30,37 +25,40 @@ class TweetScraper:
         await self.ensure_setup()
 
         try:
-            user = await self.api.user_by_login(screen_name)
+            user = await self.client.get_user_by_screen_name(screen_name)
         except Exception as e:
             print(f"[scraper] Could not find user @{screen_name}: {e}")
             return []
 
         tweets = []
         try:
-            async for tweet in self.api.user_tweets(user.id, limit=limit):
+            result = await self.client.get_user_tweets(
+                user.id, "Tweets", count=limit
+            )
+            for tweet in result:
                 rt_user = None
-                if tweet.retweetedTweet is not None:
-                    rt_user = (
-                        tweet.retweetedTweet.user.username
-                        if tweet.retweetedTweet.user
-                        else None
-                    )
+                is_retweet = tweet.retweeted_tweet is not None
+                if is_retweet and tweet.retweeted_tweet.user:
+                    rt_user = tweet.retweeted_tweet.user.screen_name
 
+                # Extract mentioned usernames from tweet text
                 mentioned = []
-                if tweet.mentionedUsers:
-                    mentioned = [u.username for u in tweet.mentionedUsers]
+                text = tweet.full_text or tweet.text or ""
+                for word in text.split():
+                    if word.startswith("@") and len(word) > 1:
+                        mentioned.append(word[1:].strip(".:,;!?"))
 
                 tweets.append(
                     {
                         "id": str(tweet.id),
-                        "text": tweet.rawContent,
-                        "created_at": tweet.date.isoformat(),
+                        "text": text,
+                        "created_at": str(tweet.created_at),
                         "user": screen_name,
                         "url": f"https://x.com/{screen_name}/status/{tweet.id}",
-                        "likes": tweet.likeCount or 0,
-                        "retweets": tweet.retweetCount or 0,
-                        "replies": tweet.replyCount or 0,
-                        "is_retweet": tweet.retweetedTweet is not None,
+                        "likes": tweet.favorite_count or 0,
+                        "retweets": tweet.retweet_count or 0,
+                        "replies": tweet.reply_count or 0,
+                        "is_retweet": is_retweet,
                         "rt_user": rt_user,
                         "mentioned_users": mentioned,
                     }
