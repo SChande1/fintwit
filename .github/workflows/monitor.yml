@@ -1,0 +1,52 @@
+name: FinTwit Monitor
+
+on:
+  schedule:
+    # Every 15 minutes
+    - cron: "*/15 * * * *"
+  workflow_dispatch:
+    inputs:
+      action:
+        description: "Action to run"
+        default: "all"
+        type: choice
+        options:
+          - all
+          - check
+          - summary
+
+jobs:
+  monitor:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Restore state & session cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            state.json
+            twscrape.db
+          key: fintwit-state-${{ github.run_id }}
+          restore-keys: |
+            fintwit-state-
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run monitor
+        env:
+          TWITTER_USERNAME: ${{ secrets.TWITTER_USERNAME }}
+          TWITTER_PASSWORD: ${{ secrets.TWITTER_PASSWORD }}
+          TWITTER_EMAIL: ${{ secrets.TWITTER_EMAIL }}
+          TWITTER_EMAIL_PASSWORD: ${{ secrets.TWITTER_EMAIL_PASSWORD }}
+          GMAIL_USER: ${{ secrets.GMAIL_USER }}
+          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+        run: |
+          ACTION="${{ github.event.inputs.action || 'all' }}"
+          python -m src "$ACTION"
