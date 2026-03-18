@@ -13,7 +13,7 @@ class TweetScraper:
             return
 
         accounts = await self.api.pool.accounts_info()
-        if accounts.get("total", 0) == 0:
+        if len(accounts) == 0:
             username = os.environ["TWITTER_USERNAME"]
             password = os.environ["TWITTER_PASSWORD"]
             email = os.environ.get("TWITTER_EMAIL", "")
