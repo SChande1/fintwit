@@ -1,2 +1,2 @@
-twscrape>=0.12
+twikit>=2.3
 httpx>=0.25
