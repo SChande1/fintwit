@@ -158,14 +158,19 @@ class TweetScraper:
         return self._parse_timeline(r.json(), screen_name)
 
     async def search_tweets(self, query: str, limit: int = 20) -> list[dict]:
-        variables = json.dumps({
-            "rawQuery": query,
-            "count": limit,
-            "querySource": "typed_query",
-            "product": "Latest",
-            "withGrokTranslatedBio": True,
-        })
-        params = {"variables": variables, "features": json.dumps(SEARCH_FEATURES)}
+        # NOTE: the captured QID is for product=Top — Twitter splits persisted
+        # operations per product variant, so this QID 404s with product=Latest.
+        variables = json.dumps(
+            {
+                "rawQuery": query,
+                "count": limit,
+                "querySource": "typed_query",
+                "product": "Top",
+                "withGrokTranslatedBio": True,
+            },
+            separators=(",", ":"),
+        )
+        params = {"variables": variables, "features": json.dumps(SEARCH_FEATURES, separators=(",", ":"))}
         # SearchTimeline lives under x.com/i/api/graphql, not api.x.com/graphql
         url = f"https://x.com/i/api/graphql/{SEARCH_TIMELINE_QID}/SearchTimeline"
 
