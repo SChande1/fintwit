@@ -224,11 +224,7 @@ class TweetScraper:
             return []
 
         if r.status_code != 200:
-            # Verbose diagnostic dump while we figure out why the endpoint 404s
-            print(f"[scraper] Search failed for '{query}': {r.status_code}")
-            print(f"[scraper]   request URL: {r.request.url}")
-            print(f"[scraper]   response headers: {dict(r.headers)}")
-            print(f"[scraper]   response body: {r.text[:1000]!r}")
+            print(f"[scraper] Search failed for '{query}': {r.status_code} {r.text[:200]}")
             return []
 
         return self._parse_search_results(r.json(), query)

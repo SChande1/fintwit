@@ -1,9 +1,9 @@
 name: FinTwit Monitor - Accounts
 
 on:
-  schedule:
-    # Every 10 minutes
-    - cron: "*/10 * * * *"
+  # Scheduled externally via cron-job.org (hits workflow_dispatch API every 10
+  # min at :00). GHA's internal scheduler was dropping runs, so we don't use
+  # schedule: here.
   workflow_dispatch:
     inputs:
       action:
