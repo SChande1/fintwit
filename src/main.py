@@ -71,6 +71,43 @@ async def check_tweets():
             except Exception as e:
                 print(f"  -> notification failed: {e}")
 
+    # Keyword search across all of Twitter
+    for keyword in config.get("keywords", []):
+        print(f"[check] Searching for keyword '{keyword}'...")
+        tweets = await scraper.search_tweets(keyword, limit=20)
+
+        for tweet in tweets:
+            if tweet["id"] in state["seen_ids"]:
+                continue
+
+            new_count += 1
+            state["seen_ids"].append(tweet["id"])
+            state["daily_tweets"].append(tweet)
+
+            for user in tweet.get("mentioned_users", []):
+                state["mentioned_accounts"][user] = (
+                    state["mentioned_accounts"].get(user, 0) + 1
+                )
+            rt_user = tweet.get("rt_user")
+            if rt_user:
+                state["mentioned_accounts"][rt_user] = (
+                    state["mentioned_accounts"].get(rt_user, 0) + 2
+                )
+
+            try:
+                text_preview = tweet["text"][:300]
+                if len(tweet["text"]) > 300:
+                    text_preview += "..."
+                notify(
+                    ntfy_topic,
+                    f"🔑 {keyword} — @{tweet['user']}",
+                    text_preview,
+                    tweet["url"],
+                )
+                print(f"  -> notified (keyword '{keyword}'): {tweet['id']}")
+            except Exception as e:
+                print(f"  -> notification failed: {e}")
+
     # Keep seen_ids from growing forever (retain last 2000)
     state["seen_ids"] = state["seen_ids"][-2000:]
 
