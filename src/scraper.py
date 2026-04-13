@@ -140,62 +140,71 @@ class TweetScraper:
             print(f"[scraper] Unexpected search response structure for '{query}'")
             return []
 
+        def _iter_tweet_results(entry):
+            content = entry.get("content", {})
+            # Single-tweet entry
+            single = content.get("itemContent", {}).get("tweet_results", {}).get("result")
+            if single:
+                yield single
+            # Module entry (search "Latest" often wraps tweets in modules)
+            for it in content.get("items", []):
+                mod = it.get("item", {}).get("itemContent", {}).get("tweet_results", {}).get("result")
+                if mod:
+                    yield mod
+
         for instruction in instructions:
             for entry in instruction.get("entries", []):
-                content = entry.get("content", {})
-                item = content.get("itemContent", {})
-                tweet_res = item.get("tweet_results", {}).get("result", {})
+                for tweet_res in _iter_tweet_results(entry):
+                    if tweet_res.get("__typename") == "TweetWithVisibilityResults":
+                        tweet_res = tweet_res.get("tweet", {})
 
-                if tweet_res.get("__typename") == "TweetWithVisibilityResults":
-                    tweet_res = tweet_res.get("tweet", {})
+                    if not tweet_res or "legacy" not in tweet_res:
+                        continue
 
-                if not tweet_res or "legacy" not in tweet_res:
-                    continue
+                    legacy = tweet_res["legacy"]
+                    tweet_id = legacy.get("id_str", "")
+                    full_text = legacy.get("full_text", "")
 
-                legacy = tweet_res["legacy"]
-                tweet_id = legacy.get("id_str", "")
-                full_text = legacy.get("full_text", "")
-
-                # Extract screen_name from the tweet's core user data
-                screen_name = (
-                    tweet_res.get("core", {})
-                    .get("user_results", {})
-                    .get("result", {})
-                    .get("legacy", {})
-                    .get("screen_name", "unknown")
-                )
-
-                rt_legacy = legacy.get("retweeted_status_result", {}).get("result", {}).get("legacy", {})
-                is_retweet = bool(rt_legacy)
-                rt_user = None
-                if is_retweet:
-                    rt_core = legacy.get("retweeted_status_result", {}).get("result", {}).get("core", {})
-                    rt_user = (
-                        rt_core.get("user_results", {})
+                    # Extract screen_name from the tweet's core user data
+                    screen_name = (
+                        tweet_res.get("core", {})
+                        .get("user_results", {})
                         .get("result", {})
                         .get("legacy", {})
-                        .get("screen_name")
+                        .get("screen_name", "unknown")
                     )
 
-                mentioned = []
-                entities = legacy.get("entities", {})
-                for mention in entities.get("user_mentions", []):
-                    mentioned.append(mention.get("screen_name", ""))
+                    rt_legacy = legacy.get("retweeted_status_result", {}).get("result", {}).get("legacy", {})
+                    is_retweet = bool(rt_legacy)
+                    rt_user = None
+                    if is_retweet:
+                        rt_core = legacy.get("retweeted_status_result", {}).get("result", {}).get("core", {})
+                        rt_user = (
+                            rt_core.get("user_results", {})
+                            .get("result", {})
+                            .get("legacy", {})
+                            .get("screen_name")
+                        )
 
-                tweets.append({
-                    "id": tweet_id,
-                    "text": full_text,
-                    "created_at": legacy.get("created_at", ""),
-                    "user": screen_name,
-                    "url": f"https://x.com/{screen_name}/status/{tweet_id}",
-                    "likes": legacy.get("favorite_count", 0),
-                    "retweets": legacy.get("retweet_count", 0),
-                    "replies": legacy.get("reply_count", 0),
-                    "is_retweet": is_retweet,
-                    "rt_user": rt_user,
-                    "mentioned_users": mentioned,
-                    "matched_keyword": query,
-                })
+                    mentioned = []
+                    entities = legacy.get("entities", {})
+                    for mention in entities.get("user_mentions", []):
+                        mentioned.append(mention.get("screen_name", ""))
+
+                    tweets.append({
+                        "id": tweet_id,
+                        "text": full_text,
+                        "created_at": legacy.get("created_at", ""),
+                        "user": screen_name,
+                        "url": f"https://x.com/{screen_name}/status/{tweet_id}",
+                        "likes": legacy.get("favorite_count", 0),
+                        "retweets": legacy.get("retweet_count", 0),
+                        "replies": legacy.get("reply_count", 0),
+                        "is_retweet": is_retweet,
+                        "rt_user": rt_user,
+                        "mentioned_users": mentioned,
+                        "matched_keyword": query,
+                    })
 
         return tweets
 
