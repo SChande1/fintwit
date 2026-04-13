@@ -1,4 +1,4 @@
-name: FinTwit Monitor
+name: FinTwit Monitor - Accounts
 
 on:
   schedule:
@@ -8,11 +8,10 @@ on:
     inputs:
       action:
         description: "Action to run"
-        default: "all"
+        default: "accounts"
         type: choice
         options:
-          - all
-          - check
+          - accounts
           - summary
 
 jobs:
@@ -28,9 +27,10 @@ jobs:
       - name: Restore state cache
         uses: actions/cache@v4
         with:
-          path: state.json
-          key: fintwit-state-${{ github.run_id }}
+          path: state_accounts.json
+          key: fintwit-state-accounts-${{ github.run_id }}
           restore-keys: |
+            fintwit-state-accounts-
             fintwit-state-
 
       - name: Install dependencies
@@ -43,6 +43,7 @@ jobs:
           GMAIL_USER: ${{ secrets.GMAIL_USER }}
           GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
           NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+          STATE_FILE: state_accounts.json
         run: |
-          ACTION="${{ github.event.inputs.action || 'all' }}"
+          ACTION="${{ github.event.inputs.action || 'accounts' }}"
           python -m src "$ACTION"

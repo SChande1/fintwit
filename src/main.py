@@ -2,8 +2,10 @@
 FinTwit Monitor — check for new tweets, notify, and send daily summaries.
 
 Usage:
-    python -m src.main check      # fetch new tweets & notify
+    python -m src.main accounts   # fetch followed accounts & notify (+ summary)
+    python -m src.main keywords   # run keyword search & notify
     python -m src.main summary    # force-send the daily summary now
+    python -m src.main all        # accounts + keywords + summary (legacy)
 """
 
 import asyncio
@@ -29,7 +31,7 @@ def _load_config() -> dict:
         return json.load(f)
 
 
-async def check_tweets():
+async def check_accounts():
     """Fetch new tweets from monitored accounts and send notifications."""
     config = _load_config()
     state = load_state()
@@ -39,7 +41,7 @@ async def check_tweets():
     new_count = 0
 
     for account in config["accounts"]:
-        print(f"[check] Fetching tweets for @{account}...")
+        print(f"[accounts] Fetching tweets for @{account}...")
         tweets = await scraper.get_user_tweets(account, limit=20)
 
         for tweet in tweets:
@@ -71,9 +73,24 @@ async def check_tweets():
             except Exception as e:
                 print(f"  -> notification failed: {e}")
 
-    # Keyword search across all of Twitter
+    # Keep seen_ids from growing forever (retain last 2000)
+    state["seen_ids"] = state["seen_ids"][-2000:]
+
+    save_state(state)
+    print(f"[accounts] Done. {new_count} new tweet(s) found.")
+
+
+async def check_keywords():
+    """Run keyword search across all of Twitter and send notifications."""
+    config = _load_config()
+    state = load_state()
+    ntfy_topic = os.environ.get("NTFY_TOPIC", "fintwit_default")
+
+    scraper = TweetScraper()
+    new_count = 0
+
     for keyword in config.get("keywords", []):
-        print(f"[check] Searching for keyword '{keyword}'...")
+        print(f"[keywords] Searching for keyword '{keyword}'...")
         tweets = await scraper.search_tweets(keyword, limit=20)
 
         for tweet in tweets:
@@ -108,11 +125,9 @@ async def check_tweets():
             except Exception as e:
                 print(f"  -> notification failed: {e}")
 
-    # Keep seen_ids from growing forever (retain last 2000)
     state["seen_ids"] = state["seen_ids"][-2000:]
-
     save_state(state)
-    print(f"[check] Done. {new_count} new tweet(s) found.")
+    print(f"[keywords] Done. {new_count} new tweet(s) found.")
 
 
 async def send_summary(force: bool = False):
@@ -159,19 +174,32 @@ async def send_summary(force: bool = False):
     save_state(state)
 
 
+async def run_accounts():
+    """Accounts workflow entry point: check accounts, then summary if it's time."""
+    await check_accounts()
+    await send_summary()
+
+
 async def run_all():
-    """Standard run: check tweets, then send summary if it's time."""
-    await check_tweets()
+    """Legacy combined run — accounts + keywords + summary."""
+    await check_accounts()
+    await check_keywords()
     await send_summary()
 
 
 def main():
     action = sys.argv[1] if len(sys.argv) > 1 else "all"
 
-    if action == "check":
-        asyncio.run(check_tweets())
+    if action == "accounts":
+        asyncio.run(run_accounts())
+    elif action == "keywords":
+        asyncio.run(check_keywords())
     elif action == "summary":
         asyncio.run(send_summary(force=True))
+    elif action == "check":
+        # Legacy alias for "all" minus summary
+        asyncio.run(check_accounts())
+        asyncio.run(check_keywords())
     else:
         asyncio.run(run_all())
 
