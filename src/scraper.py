@@ -84,6 +84,14 @@ class TweetScraper:
             headers={
                 "authorization": f"Bearer {BEARER}",
                 "x-csrf-token": ct0,
+                # These signals are required by x.com/i/api/graphql/* endpoints
+                # (e.g. SearchTimeline). Without them the server returns 404 to
+                # hide the endpoint from unauthorized clients.
+                "x-twitter-active-user": "yes",
+                "x-twitter-auth-type": "OAuth2Session",
+                "x-twitter-client-language": "en",
+                "origin": "https://x.com",
+                "referer": "https://x.com/",
                 "user-agent": (
                     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
                     "AppleWebKit/537.36 (KHTML, like Gecko) "
