@@ -1,7 +1,11 @@
 import json
 import os
 
+import bs4
 import httpx
+import requests
+from x_client_transaction import ClientTransaction
+from x_client_transaction.utils import get_ondemand_file_url, handle_x_migration
 
 BEARER = "AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIzUejRCOuH5E6I8xnZz4puTs%3D1Zv7ttfk8LF81IUq16cHjhLTvJu4FA33AGWWjCpTnA"
 USER_TWEETS_QID = "H8OOoI-5ZE4NxgRr8lfyWg"
@@ -102,6 +106,31 @@ class TweetScraper:
             timeout=20,
         )
         self._user_id_cache: dict[str, str] = {}
+        self._client_transaction: ClientTransaction | None = None
+
+    def _bootstrap_client_transaction(self) -> ClientTransaction:
+        """
+        Build the ClientTransaction generator needed for x.com/i/api/graphql/*.
+        Lazy + cached: the homepage + ondemand JS only need to be fetched once
+        per scraper instance.
+        """
+        if self._client_transaction is not None:
+            return self._client_transaction
+
+        sess = requests.Session()
+        sess.headers.update({
+            "User-Agent": (
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/131.0.0.0 Safari/537.36"
+            )
+        })
+        home = handle_x_migration(sess)
+        ondemand = bs4.BeautifulSoup(
+            sess.get(get_ondemand_file_url(home)).text, "html.parser"
+        )
+        self._client_transaction = ClientTransaction(home, ondemand)
+        return self._client_transaction
 
     async def _get_user_id(self, screen_name: str) -> str | None:
         if screen_name in self._user_id_cache:
@@ -172,10 +201,24 @@ class TweetScraper:
         )
         params = {"variables": variables, "features": json.dumps(SEARCH_FEATURES, separators=(",", ":"))}
         # SearchTimeline lives under x.com/i/api/graphql, not api.x.com/graphql
-        url = f"https://x.com/i/api/graphql/{SEARCH_TIMELINE_QID}/SearchTimeline"
+        path = f"/i/api/graphql/{SEARCH_TIMELINE_QID}/SearchTimeline"
+        url = f"https://x.com{path}"
+
+        # SearchTimeline now requires x-client-transaction-id; without it the
+        # endpoint silently returns 404 with empty body.
+        try:
+            ct = self._bootstrap_client_transaction()
+            tx_id = ct.generate_transaction_id(method="GET", path=path)
+        except Exception as e:
+            print(f"[scraper] Failed to generate x-client-transaction-id: {e}")
+            return []
 
         try:
-            r = await self.client.get(url, params=params)
+            r = await self.client.get(
+                url,
+                params=params,
+                headers={"x-client-transaction-id": tx_id},
+            )
         except Exception as e:
             print(f"[scraper] Search request failed for '{query}': {e}")
             return []

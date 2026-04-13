@@ -1,0 +1,36 @@
+name: FinTwit Monitor - Keywords
+
+on:
+  schedule:
+    # Every 10 minutes
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+
+jobs:
+  monitor:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Restore state cache
+        uses: actions/cache@v4
+        with:
+          path: state_keywords.json
+          key: fintwit-state-keywords-${{ github.run_id }}
+          restore-keys: |
+            fintwit-state-keywords-
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run keyword search
+        env:
+          TWITTER_AUTH_TOKEN: ${{ secrets.TWITTER_AUTH_TOKEN }}
+          TWITTER_CT0: ${{ secrets.TWITTER_CT0 }}
+          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+          STATE_FILE: state_keywords.json
+        run: python -m src keywords
