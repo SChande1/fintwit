@@ -1,11 +1,9 @@
 name: FinTwit Monitor - Keywords
 
 on:
-  schedule:
-    # Every 10 minutes, offset from the accounts workflow to avoid collision
-    # with its cron (GHA drops schedules when two workflows share identical
-    # cron expressions). Fires at :05, :15, :25, :35, :45, :55.
-    - cron: "5,15,25,35,45,55 * * * *"
+  # Scheduled externally via cron-job.org (hits workflow_dispatch API every 10
+  # min at :05, offset from accounts). GHA's internal scheduler was dropping
+  # runs, so we don't use schedule: here.
   workflow_dispatch:
 
 jobs:
