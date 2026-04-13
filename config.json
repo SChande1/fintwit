@@ -1,6 +1,7 @@
 {
   "accounts": ["zerohedge", "abcampbell"],
+  "keywords": ["germanium", "dysprosium", "indium"],
   "email": "shreychande@gmail.com",
   "summary_hour_utc": 4,
-  "check_interval_minutes": 15
+  "check_interval_minutes": 10
 }
